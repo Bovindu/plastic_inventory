@@ -5,15 +5,17 @@ import { InventoryItem } from '../types';
 interface AddItemModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAdd: (item: Omit<InventoryItem, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onAdd: (item: Omit<InventoryItem, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   location: 'location-1' | 'location-2';
+  loading?: boolean;
 }
 
 export const AddItemModal: React.FC<AddItemModalProps> = ({
   isOpen,
   onClose,
   onAdd,
-  location
+  location,
+  loading = false
 }) => {
   const [formData, setFormData] = useState({
     itemName: '',
@@ -25,7 +27,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     note: ''
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     const newItem = {
@@ -39,17 +41,20 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
       location
     } as Omit<InventoryItem, 'id' | 'createdAt' | 'updatedAt'>;
 
-    onAdd(newItem);
-    setFormData({
-      itemName: '',
-      category: 'material',
-      type: '',
-      price: '',
-      stock: '',
-      status: 'in stock',
-      note: ''
-    });
-    onClose();
+    try {
+      await onAdd(newItem);
+      setFormData({
+        itemName: '',
+        category: 'material',
+        type: '',
+        price: '',
+        stock: '',
+        status: 'in stock',
+        note: ''
+      });
+    } catch (error) {
+      // Error handling is done in parent component
+    }
   };
 
   if (!isOpen) return null;
@@ -191,16 +196,18 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+              disabled={loading}
+              className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2"
+              disabled={loading}
+              className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Package className="w-4 h-4" />
-              Add Item
+              {loading ? 'Adding...' : 'Add Item'}
             </button>
           </div>
         </form>

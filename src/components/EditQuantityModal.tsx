@@ -6,14 +6,16 @@ interface EditQuantityModalProps {
   isOpen: boolean;
   onClose: () => void;
   item: InventoryItem | null;
-  onUpdate: (itemId: string, newQuantity: number) => void;
+  onUpdate: (itemId: string, newQuantity: number) => Promise<void>;
+  loading?: boolean;
 }
 
 export const EditQuantityModal: React.FC<EditQuantityModalProps> = ({
   isOpen,
   onClose,
   item,
-  onUpdate
+  onUpdate,
+  loading = false
 }) => {
   const [quantity, setQuantity] = useState('');
   const [operation, setOperation] = useState<'add' | 'remove'>('add');
@@ -25,7 +27,7 @@ export const EditQuantityModal: React.FC<EditQuantityModalProps> = ({
     }
   }, [item]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!item || !quantity) return;
 
@@ -34,19 +36,17 @@ export const EditQuantityModal: React.FC<EditQuantityModalProps> = ({
       ? item.stock + quantityChange 
       : Math.max(0, item.stock - quantityChange);
 
-    onUpdate(item.id, newStock);
-    onClose();
+    await onUpdate(item.id, newStock);
   };
 
-  const quickAdjust = (amount: number, op: 'add' | 'remove') => {
+  const quickAdjust = async (amount: number, op: 'add' | 'remove') => {
     if (!item) return;
     
     const newStock = op === 'add' 
       ? item.stock + amount 
       : Math.max(0, item.stock - amount);
 
-    onUpdate(item.id, newStock);
-    onClose();
+    await onUpdate(item.id, newStock);
   };
 
   if (!isOpen || !item) return null;
@@ -84,28 +84,32 @@ export const EditQuantityModal: React.FC<EditQuantityModalProps> = ({
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => quickAdjust(1, 'add')}
-                className="flex items-center justify-center gap-2 px-4 py-3 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors font-medium"
+                disabled={loading}
+                className="flex items-center justify-center gap-2 px-4 py-3 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Plus className="w-4 h-4" />
                 +1
               </button>
               <button
                 onClick={() => quickAdjust(1, 'remove')}
-                className="flex items-center justify-center gap-2 px-4 py-3 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors font-medium"
+                disabled={loading}
+                className="flex items-center justify-center gap-2 px-4 py-3 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Minus className="w-4 h-4" />
                 -1
               </button>
               <button
                 onClick={() => quickAdjust(10, 'add')}
-                className="flex items-center justify-center gap-2 px-4 py-3 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors font-medium"
+                disabled={loading}
+                className="flex items-center justify-center gap-2 px-4 py-3 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Plus className="w-4 h-4" />
                 +10
               </button>
               <button
                 onClick={() => quickAdjust(10, 'remove')}
-                className="flex items-center justify-center gap-2 px-4 py-3 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors font-medium"
+                disabled={loading}
+                className="flex items-center justify-center gap-2 px-4 py-3 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Minus className="w-4 h-4" />
                 -10
@@ -147,7 +151,8 @@ export const EditQuantityModal: React.FC<EditQuantityModalProps> = ({
                   min="1"
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  disabled={loading}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="Enter quantity"
                   required
                 />
@@ -156,20 +161,22 @@ export const EditQuantityModal: React.FC<EditQuantityModalProps> = ({
                   <button
                     type="button"
                     onClick={onClose}
-                    className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                    disabled={loading}
+                    className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
+                    disabled={loading}
                     className={`flex-1 px-4 py-3 rounded-lg transition-colors font-medium flex items-center justify-center gap-2 ${
                       operation === 'add'
-                        ? 'bg-green-600 text-white hover:bg-green-700'
-                        : 'bg-red-600 text-white hover:bg-red-700'
+                        ? 'bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                        : 'bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed'
                     }`}
                   >
                     {operation === 'add' ? <Plus className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
-                    {operation === 'add' ? 'Add' : 'Remove'} {quantity || '0'}
+                    {loading ? 'Updating...' : `${operation === 'add' ? 'Add' : 'Remove'} ${quantity || '0'}`}
                   </button>
                 </div>
               </form>

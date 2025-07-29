@@ -6,83 +6,18 @@ import { AddItemModal } from './AddItemModal';
 import { EditQuantityModal } from './EditQuantityModal';
 import { InventoryItem } from '../types';
 import { useAuth } from '../contexts/AuthContext';
-
-// Mock data for demonstration
-const mockItems: InventoryItem[] = [
-  {
-    id: 'MAT001',
-    itemName: 'HDPE Pellets',
-    type: 'virgin',
-    price: 1.25,
-    stock: 5000,
-    status: 'in stock',
-    note: 'High density polyethylene for bottles',
-    location: 'location-1',
-    category: 'material',
-    createdAt: new Date('2024-01-15'),
-    updatedAt: new Date('2024-01-15')
-  },
-  {
-    id: 'MAT002',
-    itemName: 'PET Recycled Flakes',
-    type: 'recycled',
-    price: 0.85,
-    stock: 25,
-    status: 'repurchase needed',
-    note: 'Low stock - reorder soon',
-    location: 'location-1',
-    category: 'material',
-    createdAt: new Date('2024-01-10'),
-    updatedAt: new Date('2024-01-20')
-  },
-  {
-    id: 'PRD001',
-    itemName: 'Water Bottles 500ml',
-    price: 0.15,
-    stock: 10000,
-    status: 'in stock',
-    note: 'Clear bottles with standard cap',
-    location: 'location-1',
-    category: 'product',
-    createdAt: new Date('2024-01-12'),
-    updatedAt: new Date('2024-01-18')
-  },
-  {
-    id: 'AST001',
-    itemName: 'Injection Molding Machine #3',
-    price: 45000,
-    stock: 1,
-    status: 'temporarily unavailable',
-    note: 'Under maintenance',
-    location: 'location-2',
-    category: 'asset',
-    createdAt: new Date('2024-01-05'),
-    updatedAt: new Date('2024-01-19')
-  },
-  {
-    id: 'MAT003',
-    itemName: 'Masterbatch Blue',
-    type: 'master',
-    price: 3.50,
-    stock: 150,
-    status: 'in stock',
-    note: 'For coloring plastic products',
-    location: 'location-2',
-    category: 'material',
-    createdAt: new Date('2024-01-08'),
-    updatedAt: new Date('2024-01-16')
-  }
-];
+import { useInventory } from '../hooks/useInventory';
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
-  const [items, setItems] = useState<InventoryItem[]>(mockItems);
+  const { items, loading, error, addItem, updateQuantity } = useInventory();
   const [currentLocation, setCurrentLocation] = useState<'location-1' | 'location-2'>('location-1');
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const locationItems = items.filter(item => item.location === currentLocation);
 
@@ -93,28 +28,71 @@ export const Dashboard: React.FC = () => {
     totalValue: locationItems.reduce((sum, item) => sum + (item.price * item.stock), 0)
   };
 
-  const handleAddItem = (newItemData: Omit<InventoryItem, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const newItem: InventoryItem = {
-      ...newItemData,
-      id: `${newItemData.category.toUpperCase().slice(0,3)}${String(items.length + 1).padStart(3, '0')}`,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    setItems([...items, newItem]);
+  const handleAddItem = async (newItemData: Omit<InventoryItem, 'id' | 'createdAt' | 'updatedAt'>) => {
+    try {
+      setActionLoading(true);
+      await addItem(newItemData);
+      setIsAddModalOpen(false);
+    } catch (error) {
+      console.error('Failed to add item:', error);
+      alert('Failed to add item. Please try again.');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
-  const handleUpdateQuantity = (itemId: string, newQuantity: number) => {
-    setItems(items.map(item => 
-      item.id === itemId 
-        ? { ...item, stock: newQuantity, updatedAt: new Date() }
-        : item
-    ));
+  const handleUpdateQuantity = async (itemId: string, newQuantity: number) => {
+    try {
+      setActionLoading(true);
+      await updateQuantity(itemId, newQuantity);
+      setIsEditModalOpen(false);
+    } catch (error) {
+      console.error('Failed to update quantity:', error);
+      alert('Failed to update quantity. Please try again.');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleEditQuantity = (item: InventoryItem) => {
     setSelectedItem(item);
     setIsEditModalOpen(true);
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header currentLocation={currentLocation} onLocationChange={setCurrentLocation} />
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading inventory...</p>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header currentLocation={currentLocation} onLocationChange={setCurrentLocation} />
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="w-6 h-6 text-red-600" />
+              <div>
+                <h3 className="text-lg font-semibold text-red-800">Error Loading Inventory</h3>
+                <p className="text-red-700">{error}</p>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -229,6 +207,7 @@ export const Dashboard: React.FC = () => {
         onClose={() => setIsAddModalOpen(false)}
         onAdd={handleAddItem}
         location={currentLocation}
+        loading={actionLoading}
       />
 
       <EditQuantityModal
@@ -236,6 +215,7 @@ export const Dashboard: React.FC = () => {
         onClose={() => setIsEditModalOpen(false)}
         item={selectedItem}
         onUpdate={handleUpdateQuantity}
+        loading={actionLoading}
       />
     </div>
   );

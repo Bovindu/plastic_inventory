@@ -3,6 +3,7 @@ export interface User {
   username: string;
   role: 'owner' | 'worker';
   name: string;
+  created_at?: string;
 }
 
 export interface InventoryItem {
@@ -15,12 +16,13 @@ export interface InventoryItem {
   note: string;
   location: 'location-1' | 'location-2';
   category: 'material' | 'product' | 'asset';
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AuthContextType {
   user: User | null;
-  login: (username: string, password: string) => boolean;
+  login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
+  loading: boolean;
 }

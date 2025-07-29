@@ -1,43 +1,146 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, AuthContextType } from '../types';
+import { supabase } from '../lib/supabase';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock users for demo
-const mockUsers: { [key: string]: User } = {
-  'owner': {
-    id: '1',
-    username: 'owner',
-    role: 'owner',
-    name: 'Factory Owner'
-  },
-  'worker': {
-    id: '2',
-    username: 'worker',
-    role: 'worker',
-    name: 'Factory Worker'
-  }
-};
-
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const login = (username: string, password: string): boolean => {
-    // Simple auth check (in real app, this would be API call)
-    if ((username === 'owner' && password === 'owner123') || 
-        (username === 'worker' && password === 'worker123')) {
-      setUser(mockUsers[username]);
+  useEffect(() => {
+    // Check if user is already logged in
+    const checkUser = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          // Get user details from our users table
+          const { data: userData } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+          
+          if (userData) {
+            setUser({
+              id: userData.id,
+              username: userData.username,
+              role: userData.role,
+              name: userData.name,
+              created_at: userData.created_at
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error checking user session:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkUser();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+        
+        if (userData) {
+          setUser({
+            id: userData.id,
+            username: userData.username,
+            role: userData.role,
+            name: userData.name,
+            created_at: userData.created_at
+          });
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const login = async (username: string, password: string): Promise<boolean> => {
+    try {
+      setLoading(true);
+      
+      // First, get the user from our users table to verify they exist
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('username', username)
+        .single();
+      
+      if (userError || !userData) {
+        return false;
+      }
+
+      // For demo purposes, we'll use simple password validation
+      // In production, you'd want proper password hashing
+      const validPassword = (username === 'owner' && password === 'owner123') || 
+                           (username === 'worker' && password === 'worker123');
+      
+      if (!validPassword) {
+        return false;
+      }
+
+      // Sign in with Supabase auth using email format
+      const email = `${username}@factory.local`;
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (signInError) {
+        // If user doesn't exist in auth, create them
+        const { error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              username: userData.username,
+              role: userData.role,
+              name: userData.name
+            }
+          }
+        });
+        
+        if (signUpError) {
+          console.error('Auth error:', signUpError);
+          return false;
+        }
+      }
+
+      setUser({
+        id: userData.id,
+        username: userData.username,
+        role: userData.role,
+        name: userData.name,
+        created_at: userData.created_at
+      });
+      
       return true;
+    } catch (error) {
+      console.error('Login error:', error);
+      return false;
+    } finally {
+      setLoading(false);
     }
-    return false;
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, login, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );
