@@ -1,5 +1,5 @@
 /*
-   Create Inventory Management Schema
+Create Inventory Management Schema
 
   1. New Tables
     - `users`
