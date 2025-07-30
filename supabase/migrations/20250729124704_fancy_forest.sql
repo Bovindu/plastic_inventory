@@ -28,6 +28,7 @@ Create Inventory Management Schema
     - Only owners can see pricing data
     - Workers can update inventory quantities
 </sql>
+*/
 
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
