@@ -70,60 +70,40 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       setLoading(true);
       
-      // First, get the user from our users table to verify they exist
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('username', username)
-        .single();
-      
-      if (userError || !userData) {
-        return false;
-      }
-
-      // For demo purposes, we'll use simple password validation
-      // In production, you'd want proper password hashing
-      const validPassword = (username === 'owner' && password === 'owner123') || 
-                           (username === 'worker' && password === 'worker123');
-      
-      if (!validPassword) {
-        return false;
-      }
-
-      // Sign in with Supabase auth using email format
+      // Convert username to email format for Supabase auth
       const email = `${username}@factory.local`;
+      
+      // Sign in with Supabase auth
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password
       });
 
       if (signInError) {
-        // If user doesn't exist in auth, create them
-        const { error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              username: userData.username,
-              role: userData.role,
-              name: userData.name
-            }
-          }
-        });
-        
-        if (signUpError) {
-          console.error('Auth error:', signUpError);
-          return false;
-        }
+        console.error('Auth error:', signInError);
+        return false;
       }
 
-      setUser({
-        id: userData.id,
-        username: userData.username,
-        role: userData.role,
-        name: userData.name,
-        created_at: userData.created_at
-      });
+      // Get the current session to get user ID
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        // Get user details from our users table
+        const { data: userData } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+        
+        if (userData) {
+          setUser({
+            id: userData.id,
+            username: userData.username,
+            role: userData.role,
+            name: userData.name,
+            created_at: userData.created_at
+          });
+        }
+      }
       
       return true;
     } catch (error) {
