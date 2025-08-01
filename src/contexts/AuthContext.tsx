@@ -12,6 +12,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Check if user is already logged in
     const checkUser = async () => {
       try {
+        setLoading(true);
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           // Get user details from our users table
@@ -29,10 +30,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               name: userData.name,
               created_at: userData.created_at
             });
+          } else {
+            // User exists in auth but not in users table, sign them out
+            await supabase.auth.signOut();
+            setUser(null);
           }
+        } else {
+          setUser(null);
         }
       } catch (error) {
         console.error('Error checking user session:', error);
+        setUser(null);
       } finally {
         setLoading(false);
       }
@@ -57,10 +65,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             name: userData.name,
             created_at: userData.created_at
           });
+        } else {
+          // User exists in auth but not in users table
+          setUser(null);
         }
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
       }
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
