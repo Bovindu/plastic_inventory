@@ -9,20 +9,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is already logged in
-    const checkUser = async () => {
+    let mounted = true;
+
+    const initializeAuth = async () => {
       try {
-        setLoading(true);
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Session error:', error);
+          if (mounted) {
+            setUser(null);
+            setLoading(false);
+          }
+          return;
+        }
+
+        if (session?.user && mounted) {
           // Get user details from our users table
-          const { data: userData } = await supabase
+          const { data: userData, error: userError } = await supabase
             .from('users')
             .select('*')
             .eq('id', session.user.id)
             .maybeSingle();
           
-          if (userData) {
+          if (userError) {
+            console.error('User data error:', userError);
+            setUser(null);
+          } else if (userData) {
             setUser({
               id: userData.id,
               username: userData.username,
@@ -35,47 +48,68 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             await supabase.auth.signOut();
             setUser(null);
           }
-        } else {
+        } else if (mounted) {
           setUser(null);
         }
       } catch (error) {
-        console.error('Error checking user session:', error);
-        setUser(null);
+        console.error('Auth initialization error:', error);
+        if (mounted) {
+          setUser(null);
+        }
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
-    checkUser();
+    initializeAuth();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+
+      console.log('Auth state change:', event, session?.user?.id);
+
       if (event === 'SIGNED_IN' && session?.user) {
-        const { data: userData } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', session.user.id)
-          .maybeSingle();
-        
-        if (userData) {
-          setUser({
-            id: userData.id,
-            username: userData.username,
-            role: userData.role,
-            name: userData.name,
-            created_at: userData.created_at
-          });
-        } else {
-          // User exists in auth but not in users table
+        try {
+          const { data: userData, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', session.user.id)
+            .maybeSingle();
+          
+          if (error) {
+            console.error('User lookup error:', error);
+            setUser(null);
+          } else if (userData) {
+            setUser({
+              id: userData.id,
+              username: userData.username,
+              role: userData.role,
+              name: userData.name,
+              created_at: userData.created_at
+            });
+          } else {
+            // User exists in auth but not in users table
+            console.log('User not found in users table');
+            setUser(null);
+          }
+        } catch (error) {
+          console.error('Auth state change error:', error);
           setUser(null);
         }
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
       }
+      
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const login = async (username: string, password: string): Promise<boolean> => {
@@ -86,7 +120,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const email = `${username}@factory.local`;
       
       // Sign in with Supabase auth
-      const { error: signInError } = await supabase.auth.signInWithPassword({
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password
       });
@@ -96,16 +130,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return false;
       }
 
-      // Get the current session to get user ID
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
+      if (data.user) {
         // Get user details from our users table
-        const { data: userData } = await supabase
+        const { data: userData, error: userError } = await supabase
           .from('users')
           .select('*')
-          .eq('id', session.user.id)
+          .eq('id', data.user.id)
           .maybeSingle();
         
+        if (userError) {
+          console.error('User lookup error:', userError);
+          return false;
+        }
+
         if (userData) {
           setUser({
             id: userData.id,
@@ -114,10 +151,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             name: userData.name,
             created_at: userData.created_at
           });
+          return true;
+        } else {
+          console.error('User not found in users table');
+          return false;
         }
       }
       
-      return true;
+      return false;
     } catch (error) {
       console.error('Login error:', error);
       return false;
@@ -127,8 +168,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   return (
